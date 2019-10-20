@@ -95,6 +95,8 @@ def test(model, test_dataloader, device, epoch, writer):
              )
         writer.add_scalar('Loss/Eval', test_loss, epoch)
         writer.add_scalar('Accuracy/Eval', 100.*correct/len(test_dataloader.dataset), epoch)
+        for tag, param in model.named_parameters():
+            writer.add_histogram(tag, param, epoch)
 
 
 def main():
