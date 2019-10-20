@@ -5,7 +5,9 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.callbacks import TensorBoard
 import numpy as np
+from datetime import datetime
 
 batch_size = 128
 epochs = 1
@@ -36,11 +38,21 @@ x_test = np.expand_dims(x_test/255, axis=-1)
 y_train = to_categorical(y_train, 10)
 y_test = to_categorical(y_test, 10)
 
+logdir = "./logs" + datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = TensorBoard(log_dir=logdir,
+                                                   histogram_freq=1,
+                                                   write_graph=False,
+                                                   write_grads=True,
+                                                   write_images=True,
+                                                   update_freq='batch'
+                                                  )
+
 model.fit(x_train, y_train,
           batch_size=batch_size,
           epochs=epochs,
           verbose=1,
-          validation_data=(x_test, y_test)
+          validation_data=(x_test, y_test),
+          callbacks=[tensorboard_callback]
          )
 
 score = model.evaluate(x_test, y_test, verbose=0)
