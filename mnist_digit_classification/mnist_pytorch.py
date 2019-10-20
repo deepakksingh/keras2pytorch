@@ -1,9 +1,11 @@
 
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets, transforms
 import torch.optim as optim
 import torch
+import torchvision
 
 batch_size = 128
 num_epochs = 12
@@ -48,8 +50,9 @@ class mnist_cnn(nn.Module):
         return F.softmax(x, dim=1)
 
 
-def train(model, train_dataloader, optimizer, device, epoch):
+def train(model, train_dataloader, optimizer, device, epoch, writer):
     model.train() # sets to training mode
+    num_batches = len(train_dataloader.dataset)/batch_size+1
     for batch_id, (data, target) in enumerate(train_dataloader):
         data, target = data.to(device), target.to(device)
         output = model(data)
@@ -60,18 +63,24 @@ def train(model, train_dataloader, optimizer, device, epoch):
 
         pred = output.argmax(dim=1, keepdim=True) # get the index of the max log-probability
         correct = pred.eq(target.view_as(pred)).sum().item()
-        # print("[Train] Epoch: {} [{}/{}]    Loss: {:.6f}   Batch Acc: {.6f}".format(
         print("[Train] Epoch: {} [{}/{}]    Loss: {:.6f}   Batch Acc: {:.2f}".format(
               epoch, batch_id*batch_size, len(train_dataloader.dataset),
               loss.item(), correct/batch_size*100))
+        writer.add_scalar('Loss/Train', loss.item(), num_batches*epoch+batch_id)
+        writer.add_scalar('Accuracy/Train', correct/batch_size*100, num_batches*epoch+batch_id)
 
 
-def test(model, test_dataloader, device, epoch):
+def test(model, test_dataloader, device, epoch, writer):
     model.eval()
     test_loss = 0
     correct = 0
     with torch.no_grad():
         for batch_id, (data, target) in enumerate(test_dataloader):
+                grid = torchvision.utils.make_grid(data)
+                writer.add_image('images', grid, 0)
+                writer.add_graph(model, data)
+                writer.close()
+
                 data, target = data.to(device), target.to(device)
                 output = model(data)
                 test_loss += F.cross_entropy(output, target, reduction='sum').item() # sum up batch loss
@@ -84,6 +93,8 @@ def test(model, test_dataloader, device, epoch):
               epoch, test_loss, correct, len(test_dataloader.dataset),
               100.*correct/len(test_dataloader.dataset))
              )
+        writer.add_scalar('Loss/Eval', test_loss, epoch)
+        writer.add_scalar('Accuracy/Eval', 100.*correct/len(test_dataloader.dataset), epoch)
 
 
 def main():
@@ -100,9 +111,10 @@ def main():
     test_dataloader = torch.utils.data.DataLoader(mnist_test, batch_size=batch_size, shuffle=True)
 
     optimizer = optim.Adam(params=model.parameters(), lr=1e-3)
+    writer = SummaryWriter()
     for epoch in range(num_epochs):
-        train(model, train_dataloader, optimizer, device, epoch)
-        test(model, test_dataloader, device, epoch)
+        train(model, train_dataloader, optimizer, device, epoch, writer)
+        test(model, test_dataloader, device, epoch, writer)
 
 
 if __name__=="__main__":
