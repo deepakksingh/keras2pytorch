@@ -8,6 +8,7 @@ import torch
 batch_size = 128
 num_epochs = 12
 
+
 # Note that Torch has channels first by default (M, C, W, H) whereas Keras has
 # channels last (M, W, H, C)
 class mnist_cnn(nn.Module):
@@ -45,3 +46,64 @@ class mnist_cnn(nn.Module):
         x = self.dropout2(x)
         x = self.fc2(x)
         return F.softmax(x, dim=1)
+
+
+def train(model, train_dataloader, optimizer, device, epoch):
+    model.train() # sets to training mode
+    for batch_id, (data, target) in enumerate(train_dataloader):
+        data, target = data.to(device), target.to(device)
+        output = model(data)
+        optimizer.zero_grad()
+        loss = F.cross_entropy(input=output, target=target)
+        loss.backward()
+        optimizer.step()
+
+        pred = output.argmax(dim=1, keepdim=True) # get the index of the max log-probability
+        correct = pred.eq(target.view_as(pred)).sum().item()
+        # print("[Train] Epoch: {} [{}/{}]    Loss: {:.6f}   Batch Acc: {.6f}".format(
+        print("[Train] Epoch: {} [{}/{}]    Loss: {:.6f}   Batch Acc: {:.2f}".format(
+              epoch, batch_id*batch_size, len(train_dataloader.dataset),
+              loss.item(), correct/batch_size*100))
+
+
+def test(model, test_dataloader, device, epoch):
+    model.eval()
+    test_loss = 0
+    correct = 0
+    with torch.no_grad():
+        for batch_id, (data, target) in enumerate(test_dataloader):
+                data, target = data.to(device), target.to(device)
+                output = model(data)
+                test_loss += F.cross_entropy(output, target, reduction='sum').item() # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True) # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+
+        test_loss /= len(test_dataloader.dataset)
+
+        print("[Test] Epoch: {} Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)".format(
+              epoch, test_loss, correct, len(test_dataloader.dataset),
+              100.*correct/len(test_dataloader.dataset))
+             )
+
+
+def main():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = mnist_cnn()
+    model.to(device)
+    print(model)
+
+    transform = transforms.Compose([transforms.ToTensor()]) # converts to 0-1 and makes it (M, 1, H, W)
+    mnist_train = datasets.MNIST('/tmp/', train=True, download=True, transform=transform)
+    train_dataloader = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size, shuffle=True)
+
+    mnist_test = datasets.MNIST('/tmp/', train=False, download=True, transform=transform)
+    test_dataloader = torch.utils.data.DataLoader(mnist_test, batch_size=batch_size, shuffle=True)
+
+    optimizer = optim.Adam(params=model.parameters(), lr=1e-3)
+    for epoch in range(num_epochs):
+        train(model, train_dataloader, optimizer, device, epoch)
+        test(model, test_dataloader, device, epoch)
+
+
+if __name__=="__main__":
+    main()
